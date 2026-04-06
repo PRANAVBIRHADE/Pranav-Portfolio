@@ -19,7 +19,7 @@ export function NeuralConnections({ points, color = "#00f2ff" }: { points: Conne
 }
 
 function ConnectionLine({ end, color }: { end: [number, number, number], color: string }) {
-  const pulseRef = useRef<THREE.Mesh>(null);
+  const pulseRefs = useRef<THREE.Mesh[]>([]);
   
   const curve = useMemo(() => {
     return new THREE.QuadraticBezierCurve3(
@@ -29,38 +29,56 @@ function ConnectionLine({ end, color }: { end: [number, number, number], color: 
     );
   }, [end]);
 
-  const points = useMemo(() => curve.getPoints(50), [curve]);
-  const geometry = useMemo(() => new THREE.BufferGeometry().setFromPoints(points), [points]);
+  const tubeGeometry = useMemo(() => new THREE.TubeGeometry(curve, 64, 0.008, 8, false), [curve]);
+  
+  const pulseData = useMemo(() => {
+    return [
+        { offset: 0, speed: 0.4 },
+        { offset: 0.3, speed: 0.6 },
+        { offset: 0.7, speed: 0.3 }
+    ];
+  }, []);
 
   useFrame((state) => {
     const t = state.clock.getElapsedTime();
-    if (pulseRef.current) {
-        const progress = (t * 0.5) % 1;
-        const pos = curve.getPoint(progress);
-        pulseRef.current.position.copy(pos);
-        pulseRef.current.scale.setScalar(0.1 + Math.sin(t * 10) * 0.05);
-    }
+    pulseRefs.current.forEach((ref, i) => {
+        if (ref) {
+            const data = pulseData[i];
+            const progress = (t * data.speed + data.offset) % 1;
+            const pos = curve.getPoint(progress);
+            ref.position.copy(pos);
+            ref.scale.setScalar(0.08 + Math.sin(t * 10 + i) * 0.04);
+        }
+    });
   });
 
   return (
     <group>
-      <primitive object={new THREE.Line(geometry, new THREE.LineBasicMaterial({
-        color: new THREE.Color(color),
-        transparent: true,
-        opacity: 0.2
-      }))} />
-      
-      {/* Moving Data Bit */}
-      <mesh ref={pulseRef}>
-        <sphereGeometry args={[0.15, 8, 8]} />
+      {/* Fiber Optic Tube */}
+      <mesh geometry={tubeGeometry}>
         <meshStandardMaterial 
             color={color} 
-            emissive={color} 
-            emissiveIntensity={10} 
             transparent 
-            opacity={0.8} 
+            opacity={0.15} 
+            emissive={color}
+            emissiveIntensity={0.5}
         />
       </mesh>
+      
+      {/* Moving Data Bits */}
+      {pulseData.map((_, i) => (
+        <mesh key={i} ref={(el) => { if (el) pulseRefs.current[i] = el; }}>
+            <sphereGeometry args={[0.12, 12, 12]} />
+            <meshStandardMaterial 
+                color={color} 
+                emissive={color} 
+                emissiveIntensity={15} 
+                transparent 
+                opacity={0.9} 
+                toneMapped={false}
+            />
+        </mesh>
+      ))}
     </group>
   );
 }

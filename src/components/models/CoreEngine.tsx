@@ -28,7 +28,16 @@ export default function CoreEngine({ color = "#00f2ff" }: { color?: string }) {
   const ring1Ref = useRef<THREE.Mesh>(null);
   const ring2Ref = useRef<THREE.Mesh>(null);
 
-  const { activeSection, isTransitioning, isReturningHome, transitionStartTime } = useEngineStore();
+  const { 
+    activeSection, 
+    isTransitioning, 
+    isReturningHome, 
+    transitionStartTime, 
+    transitionPhase, 
+    completeReverse,
+    pendingSection 
+  } = useEngineStore();
+
   const radiusRef = useRef(3);
   const fractureProgressRef = useRef(0);
 
@@ -59,9 +68,30 @@ export default function CoreEngine({ color = "#00f2ff" }: { color?: string }) {
 
   useFrame((state: any, delta: number) => {
     const t = state.clock.getElapsedTime();
-    const isFragmented = activeSection !== 'HOME';
+    // 1. Color Morphing Logic
+    const colorMap = {
+      HOME: '#00f2ff',
+      ABOUT: '#00f2ff',
+      PROJECTS: '#00ff88',
+      SKILLS: '#bc00ff',
+      CONTACT: '#ff4400'
+    } as const;
+
+    const currentColor = new THREE.Color(colorMap[activeSection as keyof typeof colorMap] || '#00f2ff');
+    const targetColorStr = colorMap[(pendingSection || activeSection) as keyof typeof colorMap] || '#00f2ff';
+    const targetColor = new THREE.Color(targetColorStr);
     
-    // Update fracture progress
+    // Lerp color based on transition progress
+    const mixColor = new THREE.Color().copy(currentColor);
+    if (isTransitioning) {
+        const timeSinceStart = Date.now() - transitionStartTime;
+        const duration = transitionPhase === 'REVERSING' ? 1000 : 2500;
+        const colorProgress = Math.min(timeSinceStart / duration, 1);
+        mixColor.lerp(targetColor, transitionPhase === 'REVERSING' ? colorProgress * 0.5 : colorProgress);
+    }
+
+    // 2. Fragment & Radius Logic
+    const isFragmented = activeSection !== 'HOME';
     const targetFracture = isFragmented ? 1 : 0;
     fractureProgressRef.current = THREE.MathUtils.lerp(
         fractureProgressRef.current, 
@@ -69,61 +99,82 @@ export default function CoreEngine({ color = "#00f2ff" }: { color?: string }) {
         isReturningHome ? delta * 1.5 : delta * 2.5
     );
 
-    // Smooth transition for fragmentation radius of pillars
     const targetRadius = isFragmented ? 10 : 3;
     radiusRef.current = THREE.MathUtils.lerp(radiusRef.current, targetRadius, delta * 2);
 
+    // 3. Boot Handover Scaling
+    const { scene, transitionProgress } = useEngineStore.getState();
+    let bootScale = 1;
+    if (scene === 'BOOT') {
+        // Core starts forming at 75% boot progress
+        bootScale = transitionProgress > 0.75 ? (transitionProgress - 0.75) / 0.25 : 0;
+    }
+
     if (shaderRef.current) {
       shaderRef.current.uTime = t;
-      shaderRef.current.uColor.set(color);
-      shaderRef.current.uIntensity = (isFragmented ? 0.3 : 2.0) + Math.sin(t * 3.0) * 0.5;
+      shaderRef.current.uColor.copy(mixColor);
+      shaderRef.current.uIntensity = ((isFragmented ? 0.3 : 2.0) + Math.sin(t * 3.0) * 0.5) * bootScale;
     }
 
     if (outerShellRef.current) {
       outerShellRef.current.rotation.y = t * 0.2;
+      outerShellRef.current.scale.setScalar(bootScale);
     }
     
     // Animate Shards
     if (instancedMeshRef.current) {
-        const timeSinceStart = Date.now() - transitionStartTime;
-        const rawP = Math.min(timeSinceStart / 2500, 1);
+        // Use Global Store Progress (0 to 1) which is frame-synced with Camera
+        const globalP = transitionProgress;
         
-        // Use a high-quality easing for the physical breakdown
-        const easedP = rawP < 0.5 
-            ? 4 * rawP * rawP * rawP 
-            : 1 - Math.pow(-2 * rawP + 2, 3) / 2;
+        let p = 0;
+        const REVERSE_END = 0.33; // 1.5s of 4.5s
 
-        const p = activeSection === 'HOME' ? 1 - easedP : easedP;
+        if (transitionPhase === 'REVERSING') {
+            // Map 0 -> 0.33 to 1 -> 0 (Pulling back)
+            const localP = Math.min(globalP / REVERSE_END, 1);
+            const easedP = localP < 0.5 ? 4 * localP * localP * localP : 1 - Math.pow(-2 * localP + 2, 3) / 2;
+            p = 1 - easedP;
+            
+            if (globalP >= REVERSE_END) {
+                // Trigger phase swap in store
+                completeReverse();
+            }
+        } else if (transitionPhase === 'SCATTERING') {
+            // Map 0.33 -> 1.0 to 0 -> 1 (Exploding out)
+            const localP = (globalP - REVERSE_END) / (1 - REVERSE_END);
+            const easedP = localP < 0.5 ? 4 * localP * localP * localP : 1 - Math.pow(-2 * localP + 2, 3) / 2;
+            p = easedP;
+        } else if (scene === 'BOOT') {
+            p = 0;
+        } else {
+            p = activeSection === 'HOME' ? 0 : 1;
+        }
 
         shards.forEach((shard, i) => {
-            // Vortex Calculation: Expansion + Swirl
             const pos = shard.initialPos.clone();
+            // Shard Scatter Radius
+            pos.add(shard.velocity.clone().multiplyScalar(p * 2.5));
             
-            // Linear Expansion
-            pos.add(shard.velocity.clone().multiplyScalar(p * 2));
-            
-            // Orbital Swirl (Vortex effect)
             if (p > 0) {
                 const swirlAngle = shard.swirlSpeed * p;
                 pos.applyAxisAngle(shard.swirlAxis, swirlAngle);
             }
             
             tempObject.position.copy(pos);
-            
-            // Complex Rotation
             tempObject.rotation.setFromVector3(
                 shard.rotationAxis.clone().multiplyScalar(t * shard.rotationSpeed * (p + 0.1))
             );
             
-            // High-end scaling: swell then shrink
             const swell = Math.sin(p * Math.PI) * 0.5;
-            const s = 1 + swell - (p * 0.4);
+            const s = (1 + swell - (p * 0.4)) * bootScale;
             tempObject.scale.setScalar(s);
             
             tempObject.updateMatrix();
             instancedMeshRef.current!.setMatrixAt(i, tempObject.matrix);
         });
+        
         instancedMeshRef.current.instanceMatrix.needsUpdate = true;
+        instancedMeshRef.current.visible = bootScale > 0;
     }
 
     if (ring1Ref.current) {

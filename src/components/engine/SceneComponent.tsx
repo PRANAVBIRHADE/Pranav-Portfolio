@@ -58,7 +58,7 @@ const CinematicEffects = React.memo(({ isGLReady, isTransitioning, transitionSta
   });
 
   return (
-    <EffectComposer multisampling={0} enableNormalPass={false}>
+    <EffectComposer enableNormalPass={false} multisampling={0}>
       <Bloom 
         luminanceThreshold={1.0} 
         mipmapBlur 
@@ -75,7 +75,7 @@ const CinematicEffects = React.memo(({ isGLReady, isTransitioning, transitionSta
             focusDistance={0.012} 
             focalLength={0.15} 
             bokehScale={6} 
-            height={480} 
+            height={360} 
         />
       ) : <></>}
     </EffectComposer>
@@ -85,105 +85,88 @@ CinematicEffects.displayName = 'CinematicEffects';
 
 // --- Camera Rig for Cinematic Movement ---
 function CameraRig() {
-  const { scene, activeSection, isTransitioning, transitionStartTime, isReturningHome, setTransitionProgress } = useEngineStore();
+  const { scene, activeSection, isTransitioning, transitionStartTime, totalTransitionDuration, isReturningHome, setTransitionProgress } = useEngineStore();
   
   const startPos = useRef(new THREE.Vector3(0, 0, 10));
   const startLookAt = useRef(new THREE.Vector3(0, 0, 0));
   const currentLookAt = useRef(new THREE.Vector3(0, 0, 0));
-  const isTransitioningRef = useRef(false);
+  
+  // To detect the exact start of a new transition
+  const lastActiveRef = useRef(activeSection);
+  const lastStartTimeRef = useRef(0);
 
   useFrame((state: any) => {
     const now = Date.now();
     const elapsed = now - transitionStartTime;
-    const duration = scene === 'BOOT' ? 6000 : 2500; // 6 Seconds for high-level cinematic boot, 2.5s for navigation
-    const rawProgress = Math.min(elapsed / duration, 1);
+    
+    // Capture state at the very start of a NEW transition sequence
+    if (isTransitioning && transitionStartTime !== lastStartTimeRef.current) {
+        startPos.current.copy(state.camera.position);
+        startLookAt.current.copy(currentLookAt.current);
+        lastStartTimeRef.current = transitionStartTime;
+    }
+
+    const t = Math.min(elapsed / (totalTransitionDuration || 3500), 1);
     
     if (isTransitioning) {
-        setTransitionProgress(rawProgress);
+        setTransitionProgress(t);
     }
     
-    // Custom Staged Easing
-    let t = rawProgress;
     let targetPos = new THREE.Vector3(0, 0, 12);
     let lookTarget = new THREE.Vector3(0, 0, 0);
-    let targetFov = 75;
 
     if (scene === 'BOOT' && isTransitioning) {
-        if (rawProgress < 0.25) {
-            // STAGE 1: THE CHARGE (0.0s - 1.5s)
-            // Slow cinematic creep towards the laptop
-            const stageT = rawProgress / 0.25;
+        // ... (Keep existing boot logic but use unified 't' if possible, or leave as is since it's unique)
+        if (t < 0.25) {
+            const stageT = t / 0.25;
             targetPos.set(0, 1.1, THREE.MathUtils.lerp(10, 9, stageT));
             lookTarget.set(0, 1.1, 0);
-            targetFov = 75 - (stageT * 5); // Focus in
-        } else if (rawProgress < 0.58) {
-            // STAGE 2: THE SHATTER (1.5s - 3.5s)
-            // Camera FREEZES to let the user see the laptop explode
+        } else if (t < 0.58) {
             targetPos.set(0, 1.1, 9);
             lookTarget.set(0, 1.1, 0);
-            targetFov = 70;
-        } else if (rawProgress < 0.92) {
-            // STAGE 3: THE VOID PASSAGE (3.5s - 5.5s)
-            // Ultra-fast "Singularity" zoom through the debris
-            const stageT = (rawProgress - 0.58) / 0.34;
-            const easeT = Math.pow(stageT, 4); // Even more aggressive acceleration
-            
-            targetPos.set(0, 1.1, THREE.MathUtils.lerp(9, -2, easeT));
+        } else if (t < 0.92) {
+            const stageT = (t - 0.58) / 0.34;
+            targetPos.set(0, 1.1, THREE.MathUtils.lerp(9, -2, Math.pow(stageT, 5)));
             lookTarget.set(0, 1.1, -10);
-            
-            // Dramatic "Warp Speed" FOV stretch
-            targetFov = 70 + (Math.sin(stageT * Math.PI) * 40);
         } else {
-            // STAGE 4: ARRIVAL (5.5s - 6.0s)
-            // Camera stabilizes at core
-            targetPos.set(0, 0, 12);
+            const stageT = (t - 0.92) / 0.08;
+            targetPos.set(0, 0, THREE.MathUtils.lerp(-2, 12, stageT));
             lookTarget.set(0, 0, 0);
-            targetFov = 75;
         }
     } else if (scene === 'INTERFACE') {
-        switch(activeSection) {
-            case 'ABOUT':
-                targetPos.set(-7.5, 5.0, 8);
-                lookTarget.set(-5.0, 3.6, 0);
-                break;
-            case 'PROJECTS':
-                targetPos.set(7.5, 5.0, 8);
-                lookTarget.set(5.0, 3.6, 0);
-                break;
-            case 'SKILLS':
-                targetPos.set(-7.5, -5.0, 8);
-                lookTarget.set(-5.0, -3.6, 0);
-                break;
-            case 'CONTACT':
-                targetPos.set(7.5, -5.0, 8);
-                lookTarget.set(5.0, -3.6, 0);
-                break;
-            case 'HOME':
-            default:
-                targetPos.set(0, 0, 12);
-                lookTarget.set(0, 0, 0);
-                break;
-        }
+        const sectionPosMap = {
+            ABOUT: { pos: [-7.5, 5.0, 10], look: [-5.0, 3.6, 0] },
+            PROJECTS: { pos: [7.5, 5.0, 10], look: [5.0, 3.6, 0] },
+            SKILLS: { pos: [-7.5, -5.0, 10], look: [-5.0, -3.6, 0] },
+            CONTACT: { pos: [7.5, -5.0, 10], look: [5.0, -3.6, 0] },
+            HOME: { pos: [0, 0, 12], look: [0, 0, 0] }
+        };
+        const target = sectionPosMap[activeSection] || sectionPosMap.HOME;
+        targetPos.set(...target.pos as [number, number, number]);
+        lookTarget.set(...target.look as [number, number, number]);
     }
 
     if (isTransitioning) {
-        const pathT = scene === 'BOOT' ? Math.pow(t, 2) : t;
-        state.camera.position.lerpVectors(startPos.current, targetPos, pathT);
-        currentLookAt.current.lerpVectors(startLookAt.current, lookTarget, pathT);
+        // High-Quality Quintic Interpolation for "Liquid" motion
+        const easeT = t < 0.5 ? 16 * t * t * t * t * t : 1 - Math.pow(-2 * t + 2, 5) / 2;
         
+        state.camera.position.lerpVectors(startPos.current, targetPos, easeT);
+        currentLookAt.current.lerpVectors(startLookAt.current, lookTarget, easeT);
+        
+        // Cinematic FOV Pushing
         const fovPulse = Math.sin(t * Math.PI);
-        targetFov = 75 + (isReturningHome ? -15 : 25) * fovPulse;
+        state.camera.fov = 75 + (isReturningHome ? -10 : 15) * fovPulse;
     } else {
+        // Performance-Optimized Idle (Subtle breathing)
         state.camera.position.lerp(targetPos, 0.05);
         currentLookAt.current.lerp(lookTarget, 0.05);
-        targetFov = 75;
+        state.camera.fov = THREE.MathUtils.lerp(state.camera.fov, 75, 0.05);
         
         const time = state.clock.getElapsedTime();
-        state.camera.position.x += Math.sin(time * 0.4) * 0.002;
-        state.camera.position.y += Math.cos(time * 0.3) * 0.002;
+        state.camera.position.x += Math.sin(time * 0.4) * 0.005;
+        state.camera.position.y += Math.cos(time * 0.3) * 0.005;
     }
 
-    state.camera.fov = THREE.MathUtils.lerp(state.camera.fov, targetFov, 0.1);
     state.camera.updateProjectionMatrix();
     state.camera.lookAt(currentLookAt.current);
   });
@@ -242,14 +225,12 @@ function Scene({ isGLReady }: { isGLReady: boolean }) {
       
       <fog attach="fog" args={['#050505', 2, 15]} />
 
-      <group>
-        {(scene === 'BOOT') && (
+        <group>
           <LaptopModel 
             open={isInitialized || isTransitioning} 
-            visible={true} 
+            visible={scene === 'BOOT'} 
             onBoot={() => {
               if (scene === 'BOOT') {
-                // Extended Cinematic Timeout
                 setTimeout(() => {
                   setScene('INTERFACE');
                   useEngineStore.getState().setTransitioning(false);
@@ -257,19 +238,17 @@ function Scene({ isGLReady }: { isGLReady: boolean }) {
               }
             }} 
           />
-        )}
-        
-        {(scene === 'BOOT' || scene === 'INTERFACE') && (
-          <group visible={scene === 'INTERFACE' || (scene === 'BOOT' && isTransitioning)}>
-              <CoreEngine color={activeColor} />
+          
+          {/* Core components now appear during the final stage of the boot sequence */}
+          <group visible={scene === 'INTERFACE' || (scene === 'BOOT' && useEngineStore.getState().transitionProgress > 0.75)}>
+              <CoreEngine />
               <GridFloor color={activeColor} />
               <GlobalParticles color={activeColor} count={800} />
               {scene === 'INTERFACE' && (
                 <NeuralConnections points={connectionPoints} color={activeColor} />
               )}
           </group>
-        )}
-      </group>
+        </group>
 
       {scene === 'INTERFACE' && (
         <group position={[0, 0, 0]}>

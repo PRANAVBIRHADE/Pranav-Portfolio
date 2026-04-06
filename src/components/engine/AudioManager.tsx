@@ -4,13 +4,16 @@ import { useEffect, useRef } from 'react';
 import { useEngineStore } from '@/store/useEngineStore';
 
 export default function AudioManager() {
-  const { isInitialized } = useEngineStore();
-  const hasSpokenRef = useRef(false);
+  const { isInitialized, hasSpoken, setHasSpoken } = useEngineStore();
+  const hasTriggered = useRef(false);
 
   // AI Voice Synthesis (JARVIS Style)
   const speak = (text: string) => {
     if (!window.speechSynthesis) return;
     
+    // Stop any current speech before starting new one (Fixes double-voice on some browsers)
+    window.speechSynthesis.cancel();
+
     const performSpeak = () => {
       const utterance = new SpeechSynthesisUtterance(text);
       // JARVIS is calm, British, and composed
@@ -37,14 +40,17 @@ export default function AudioManager() {
   };
 
   useEffect(() => {
-    if (isInitialized && !hasSpokenRef.current) {
-      hasSpokenRef.current = true;
-      // Trigger Initial AI Welcome
-      setTimeout(() => {
+    if (isInitialized && !hasSpoken && !hasTriggered.current) {
+      hasTriggered.current = true;
+      setHasSpoken(true);
+      
+      const timer = setTimeout(() => {
         speak("Welcome to Pranav O. S.");
-      }, 500); // Trigger slightly earlier to match the 6-second boot time cleanly
+      }, 500);
+
+      return () => clearTimeout(timer);
     }
-  }, [isInitialized]);
+  }, [isInitialized, hasSpoken, setHasSpoken]);
 
   return null; // Side-effect only component
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useFrame } from '@react-three/fiber';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { Html, Float } from '@react-three/drei';
 
@@ -18,6 +18,18 @@ export default function NavigationNode({ position, label, active, onClick, color
   const coreRef = useRef<THREE.Mesh>(null);
   const ringRef = useRef<THREE.Mesh>(null);
   const barsRef = useRef<THREE.Group>(null);
+
+  const shards = useMemo(() => {
+    return Array.from({ length: 4 }).map(() => ({
+      position: new THREE.Vector3(
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2,
+        (Math.random() - 0.5) * 2
+      ),
+      rotation: new THREE.Euler(Math.random() * Math.PI, Math.random() * Math.PI, 0),
+      speed: 0.5 + Math.random() * 0.5
+    }));
+  }, []);
 
   // Manage cursor state
   useEffect(() => {
@@ -45,16 +57,17 @@ export default function NavigationNode({ position, label, active, onClick, color
 
     if (barsRef.current) {
         barsRef.current.rotation.y = t * 0.2;
+        barsRef.current.children.forEach((child: any, i: number) => {
+            child.position.y = Math.sin(t * 2 + i) * 0.1;
+        });
     }
   });
 
   return (
     <group position={position}>
-      {/* 
-          Invisible Raycast Hitbox 
-      */}
+      {/* Invisible Raycast Hitbox */}
       <mesh 
-        position={[0, 0, 0.5]} // Keep forward position for reliable raycasting
+        position={[0, 0, 0.5]} 
         onClick={(e) => {
             e.stopPropagation();
             onClick();
@@ -73,21 +86,61 @@ export default function NavigationNode({ position, label, active, onClick, color
       </mesh>
 
       <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
-        {/* Central Core - High Emissive */}
+        {/* Outer Refractive Diamond Shell */}
         <mesh ref={coreRef}>
-          <octahedronGeometry args={[0.3, 0]} />
-          <meshStandardMaterial 
-            color={active || hovered ? color : '#333'} 
-            emissive={active || hovered ? color : '#000'}
-            emissiveIntensity={active ? 10 : (hovered ? 5 : 0)}
+          <icosahedronGeometry args={[0.35, 1]} />
+          <meshPhysicalMaterial 
+            color={color}
+            emissive={color}
+            emissiveIntensity={active || hovered ? 0.5 : 0.1}
+            transmission={1}
+            thickness={1.5}
+            roughness={0}
+            ior={2.4}
+            attenuationColor={color}
+            attenuationDistance={1}
             transparent
             opacity={0.9}
           />
         </mesh>
 
+        {/* Inner Pulsing Core */}
+        <mesh scale={0.15}>
+          <octahedronGeometry args={[1, 0]} />
+          <meshStandardMaterial 
+            color={color}
+            emissive={color}
+            emissiveIntensity={active ? 20 : (hovered ? 12 : 4)}
+            toneMapped={false}
+          />
+        </mesh>
+
+        {/* Orbiting Shards - Extreme Realistic Glass Squares */}
+        <group>
+            {shards.map((shard: any, i: number) => (
+                <Float key={i} speed={hovered ? shard.speed * 2.5 : shard.speed} rotationIntensity={hovered ? 4 : 1} floatIntensity={hovered ? 2 : 1}>
+                    <mesh position={shard.position.toArray() as [number, number, number]} rotation={shard.rotation}>
+                        <boxGeometry args={[0.08, 0.08, 0.08]} />
+                        <meshPhysicalMaterial 
+                            color={color} 
+                            emissive={color} 
+                            emissiveIntensity={active || hovered ? 15 : 2}
+                            transparent
+                            opacity={0.8}
+                            roughness={0.1}
+                            metalness={0.9}
+                            transmission={0.9}
+                            thickness={0.2}
+                            ior={1.5}
+                        />
+                    </mesh>
+                </Float>
+            ))}
+        </group>
+
         {/* Orbital Ring */}
         <mesh ref={ringRef}>
-          <torusGeometry args={[0.6, 0.01, 16, 100]} />
+          <torusGeometry args={[0.7, 0.005, 16, 100]} />
           <meshStandardMaterial 
             color={color} 
             emissive={color}

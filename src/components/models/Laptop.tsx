@@ -91,24 +91,40 @@ export default function LaptopModel({ open = false, onBoot, visible = true }: La
         lidRef.current.rotation.x = THREE.MathUtils.lerp(lidRef.current.rotation.x, targetRotation, delta * 10);
     }
 
-    // 3. SHATTER PHYSICS (STAGE 2)
+    // 3. SHATTER & VACUUM PHYSICS (STAGES 2 & 3)
     const isShattering = scene === 'BOOT' && transitionProgress > 0.25;
-    const localShatter = isShattering ? Math.min(1, (transitionProgress - 0.25) / 0.33) : 0; 
+    const isVacuuming = scene === 'BOOT' && transitionProgress > 0.75;
+    
+    // Shatter progress (0 to 1 between 0.25 and 0.75)
+    const shatterProgress = isShattering ? Math.min(1, (transitionProgress - 0.25) / 0.5) : 0;
+    // Vacuum progress (0 to 1 between 0.75 and 1.0)
+    const vacuumProgress = isVacuuming ? (transitionProgress - 0.75) / 0.25 : 0;
     
     if (fragmentRef.current) {
         const time = state.clock.elapsedTime;
         for (let i = 0; i < FRAGMENT_COUNT; i++) {
             const f = fragments[i];
-            const easedShatter = Math.pow(localShatter, 1.5);
             
-            dummy.position.copy(f.position).addScaledVector(f.velocity, 45 * easedShatter);
+            // Initial Shatter Position
+            const shatterPos = new THREE.Vector3().copy(f.position).addScaledVector(f.velocity, 45 * Math.pow(shatterProgress, 1.5));
+            
+            // Stage 3: Convergence towards (0, 0, 0)
+            if (isVacuuming) {
+                dummy.position.lerpVectors(shatterPos, new THREE.Vector3(0, 0, 0), Math.pow(vacuumProgress, 2));
+            } else {
+                dummy.position.copy(shatterPos);
+            }
+
             dummy.rotation.set(
               f.rotation.x + time * f.rotSpeed,
               f.rotation.y + time * f.rotSpeed,
               f.rotation.z + time * f.rotSpeed
             );
             
-            const scale = Math.max(0, (0.05 + Math.random() * 0.1) * (1 - localShatter * 1.5));
+            const baseScale = 0.05 + Math.random() * 0.1;
+            const vanishScale = Math.max(0, 1 - vacuumProgress);
+            const scale = baseScale * (1 - shatterProgress * 0.5) * vanishScale;
+            
             dummy.scale.set(scale, scale, scale);
             dummy.updateMatrix();
             fragmentRef.current.setMatrixAt(i, dummy.matrix);
@@ -149,15 +165,14 @@ export default function LaptopModel({ open = false, onBoot, visible = true }: La
     <group ref={groupRef} position={[0, -0.5, 1.5]}>
       <instancedMesh ref={fragmentRef} args={[undefined, undefined, FRAGMENT_COUNT]}>
         <icosahedronGeometry args={[1, 0]} />
-        <meshPhysicalMaterial 
-            color="#fff" 
-            metalness={1} 
-            roughness={0.02} 
-            emissive="#00f2ff" 
-            emissiveIntensity={2}
-            clearcoat={1}
-            clearcoatRoughness={0.02}
-            envMapIntensity={4}
+        <meshStandardMaterial 
+          color="#ffffff"
+          metalness={1}
+          roughness={0.05}
+          envMapIntensity={6}
+          transparent
+          opacity={0.9}
+          toneMapped={false}
         />
       </instancedMesh>
 

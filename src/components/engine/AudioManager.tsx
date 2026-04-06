@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useEngineStore } from '@/store/useEngineStore';
 
 export default function AudioManager() {
   const { isInitialized } = useEngineStore();
+  const hasSpokenRef = useRef(false);
 
   // AI Voice Synthesis (JARVIS Style)
   const speak = (text: string) => {
@@ -36,7 +37,8 @@ export default function AudioManager() {
   };
 
   useEffect(() => {
-    if (isInitialized) {
+    if (isInitialized && !hasSpokenRef.current) {
+      hasSpokenRef.current = true;
       // Trigger Initial AI Welcome
       setTimeout(() => {
         speak("Welcome to Pranav O. S.");

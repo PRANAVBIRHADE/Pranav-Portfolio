@@ -78,7 +78,7 @@ const contentMap = {
 };
 
 export default function ProjectPanel() {
-  const { activeSection } = useEngineStore();
+  const activeSection = useEngineStore((state) => state.activeSection);
   const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {

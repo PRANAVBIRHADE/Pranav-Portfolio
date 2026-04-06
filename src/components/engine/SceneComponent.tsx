@@ -58,24 +58,26 @@ const CinematicEffects = React.memo(({ isGLReady, isTransitioning, transitionSta
   });
 
   return (
-    <EffectComposer multisampling={0} enableNormalPass={true}>
+    <EffectComposer multisampling={0} enableNormalPass={false}>
       <Bloom 
         luminanceThreshold={1.0} 
         mipmapBlur 
-        intensity={isTransitioning ? 2.5 : 1.0} 
+        intensity={isTransitioning ? 3.5 : 1.2} 
         radius={0.7} 
       />
       <ChromaticAberration 
-        offset={new THREE.Vector2(isTransitioning ? 0.005 : 0.0008, 0)} 
+        offset={new THREE.Vector2(isTransitioning ? 0.008 : 0, 0)} 
       />
-      <Vignette offset={0.2} darkness={1.1} />
-      <Noise opacity={0.04} premultiply />
-      <DepthOfField 
-        focusDistance={0.015} 
-        focalLength={isTransitioning ? 0.1 : 0.05} 
-        bokehScale={isTransitioning ? 6 : 2} 
-        height={480} 
-      />
+      <Vignette offset={0.3} darkness={1.0} />
+      <Noise opacity={0.015} premultiply />
+      {isTransitioning ? (
+        <DepthOfField 
+            focusDistance={0.012} 
+            focalLength={0.15} 
+            bokehScale={6} 
+            height={480} 
+        />
+      ) : <></>}
     </EffectComposer>
   );
 });

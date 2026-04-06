@@ -2,9 +2,16 @@
 
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
 import { useEngineStore } from '@/store/useEngineStore';
+import { useShallow } from 'zustand/react/shallow';
 
 export function HomeHero() {
-  const { activeSection, scene, isTransitioning } = useEngineStore();
+  const { activeSection, scene, isTransitioning } = useEngineStore(
+    useShallow((state) => ({
+      activeSection: state.activeSection,
+      scene: state.scene,
+      isTransitioning: state.isTransitioning
+    }))
+  );
   const mouseX = useMotionValue(0);
   const mouseY = useMotionValue(0);
   

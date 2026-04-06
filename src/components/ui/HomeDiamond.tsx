@@ -2,10 +2,16 @@
 
 import { motion } from 'framer-motion';
 import { useEngineStore } from '@/store/useEngineStore';
+import { useShallow } from 'zustand/react/shallow';
 import { Home } from 'lucide-react';
 
 export function HomeDiamond() {
-  const { activeSection, setActiveSection } = useEngineStore();
+  const { activeSection, setActiveSection } = useEngineStore(
+    useShallow((state) => ({
+      activeSection: state.activeSection,
+      setActiveSection: state.setActiveSection
+    }))
+  );
 
   if (activeSection === 'HOME') return null;
 

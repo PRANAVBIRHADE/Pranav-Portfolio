@@ -70,14 +70,14 @@ export function GlobalParticles({ count = 400, color = "#00f2ff" }: { count?: nu
         ref={materialRef}
         color={color}
         emissive={color}
-        emissiveIntensity={0.5}
-        transparent
-        opacity={0.3}
-        roughness={0.05}
+        emissiveIntensity={2}
         metalness={0.9}
-        transmission={0.8}
-        thickness={0.5}
-        ior={1.5}
+        roughness={0.1}
+        clearcoat={1}
+        clearcoatRoughness={0.1}
+        envMapIntensity={5}
+        transparent
+        opacity={0.8}
       />
     </instancedMesh>
   );

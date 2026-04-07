@@ -39,36 +39,51 @@ function ConnectionLine({ end, color }: { end: [number, number, number], color: 
     ];
   }, []);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     const t = state.clock.getElapsedTime();
     pulseRefs.current.forEach((ref, i) => {
         if (ref) {
             const data = pulseData[i];
             const progress = (t * data.speed + data.offset) % 1;
             const pos = curve.getPoint(progress);
+            
             ref.position.copy(pos);
-            ref.scale.setScalar(0.08 + Math.sin(t * 10 + i) * 0.04);
+            ref.scale.setScalar(0.08 + Math.sin(t * 8 + i) * 0.05);
+            ref.rotation.x += delta * 5;
+            ref.rotation.y += delta * 3;
+            
+            // Dynamic emissive intensity based on position along the curve
+            const intensity = 15 + Math.sin(progress * Math.PI) * 20;
+            if (ref.material instanceof THREE.MeshStandardMaterial) {
+                ref.material.emissiveIntensity = intensity;
+            }
         }
     });
   });
 
   return (
     <group>
-      {/* Fiber Optic Tube */}
+      {/* Fiber Optic Tube - High Refraction */}
       <mesh geometry={tubeGeometry}>
-        <meshStandardMaterial 
+        <meshPhysicalMaterial 
             color={color} 
             transparent 
-            opacity={0.15} 
+            opacity={0.3} 
+            transmission={0.8}
+            thickness={0.5}
+            roughness={0.1}
+            metalness={0.2}
+            clearcoat={1}
             emissive={color}
-            emissiveIntensity={0.5}
+            emissiveIntensity={1.5}
+            envMapIntensity={3}
         />
       </mesh>
       
-      {/* Moving Data Bits */}
+      {/* Moving Data Bits - Shards */}
       {pulseData.map((_, i) => (
         <mesh key={i} ref={(el) => { if (el) pulseRefs.current[i] = el; }}>
-            <sphereGeometry args={[0.12, 12, 12]} />
+            <icosahedronGeometry args={[0.15, 0]} />
             <meshStandardMaterial 
                 color={color} 
                 emissive={color} 

@@ -152,9 +152,9 @@ export default function LaptopModel({ open = false, onBoot, visible = true }: La
         }
         
         const mat = screenRef.current.material as THREE.MeshStandardMaterial;
-        let screenIntensity = isShattering ? 0 : 0.5;
+        let screenIntensity = isShattering ? 0 : 0.8;
         if (isBooting && transitionProgress < 0.25) {
-            screenIntensity = Math.random() > 0.8 ? 20 : 1;
+            screenIntensity = 1.0; 
         }
         mat.emissiveIntensity = THREE.MathUtils.lerp(mat.emissiveIntensity, screenIntensity, 0.3);
         mat.opacity = opacityRef.current;
@@ -190,19 +190,37 @@ export default function LaptopModel({ open = false, onBoot, visible = true }: La
       <group>
           <mesh ref={bodyRef} receiveShadow castShadow>
             <boxGeometry args={[4, 0.2, 3]} />
-            <meshStandardMaterial color="#222" metalness={0.8} roughness={0.2} transparent />
+            <meshStandardMaterial 
+              color="#1a1a1a" 
+              metalness={0.9} 
+              roughness={0.15} 
+              envMapIntensity={2}
+              transparent 
+            />
           </mesh>
           
           <mesh ref={trackpadRef} position={[0, 0.11, 1]} receiveShadow>
             <boxGeometry args={[1.2, 0.01, 0.8]} />
-            <meshStandardMaterial color="#111" metalness={1} roughness={0.1} transparent />
+            <meshStandardMaterial 
+              color="#050505" 
+              metalness={1} 
+              roughness={0.05} 
+              envMapIntensity={5}
+              transparent 
+            />
           </mesh>
 
           <group ref={lidRef} position={[0, 0.1, -1.5]}>
             <group position={[0, 1.5, 0]}>
                 <mesh castShadow>
                     <boxGeometry args={[4, 3, 0.1]} />
-                    <meshStandardMaterial color="#222" metalness={0.8} roughness={0.2} transparent />
+                    <meshStandardMaterial 
+                      color="#1a1a1a" 
+                      metalness={0.9} 
+                      roughness={0.15} 
+                      envMapIntensity={2}
+                      transparent 
+                    />
                 </mesh>
                 
                 {transitionProgress > 0.1 && transitionProgress < 0.6 && (

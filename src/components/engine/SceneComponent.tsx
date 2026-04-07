@@ -46,38 +46,16 @@ class SceneInternalErrorBoundary extends React.Component<{ children: React.React
 const CinematicEffects = React.memo(({ isGLReady, isTransitioning, transitionStartTime }: { isGLReady: boolean, isTransitioning: boolean, transitionStartTime: number }) => {
   if (!isGLReady) return null;
 
-  useFrame((state) => {
-    const time = Date.now();
-    const elapsed = time - transitionStartTime;
-    const progress = Math.min(elapsed / 2500, 1);
-    
-    // Bell curve for motion effects (peaks at 0.5)
-    const pulse = Math.sin(progress * Math.PI);
-    
-    state.gl.autoClear = true;
-  });
-
   return (
-    <EffectComposer enableNormalPass={false} multisampling={0}>
+    <EffectComposer enableNormalPass multisampling={4}>
       <Bloom 
-        luminanceThreshold={1.0} 
+        luminanceThreshold={1.2} 
         mipmapBlur 
-        intensity={isTransitioning ? 3.5 : 1.2} 
-        radius={0.7} 
+        intensity={isTransitioning ? 2.5 : 1.5} 
+        radius={0.8} 
       />
-      <ChromaticAberration 
-        offset={new THREE.Vector2(isTransitioning ? 0.008 : 0, 0)} 
-      />
-      <Vignette offset={0.3} darkness={1.0} />
-      <Noise opacity={0.015} premultiply />
-      {isTransitioning ? (
-        <DepthOfField 
-            focusDistance={0.012} 
-            focalLength={0.15} 
-            bokehScale={6} 
-            height={360} 
-        />
-      ) : <></>}
+      <Vignette offset={0.3} darkness={0.9} />
+      <Noise opacity={0.005} premultiply />
     </EffectComposer>
   );
 });
@@ -203,27 +181,27 @@ function Scene({ isGLReady }: { isGLReady: boolean }) {
     <>
       <ambientLight intensity={0.1} />
       <spotLight 
-        position={[20, 20, 20]} 
-        angle={0.2} 
+        position={[15, 20, 5]} 
+        angle={0.15} 
         penumbra={1} 
-        intensity={activeSection === 'CONTACT' ? 40 : 15} 
+        intensity={activeSection === 'CONTACT' ? 60 : 30} 
         color={activeColor}
         castShadow 
       />
-      <pointLight position={[-15, -15, -15]} intensity={5} color={activeColor} />
-      <directionalLight position={[5, 10, 5]} intensity={2} color="#ffffff" />
+      <pointLight position={[-15, -15, -15]} intensity={10} color={activeColor} />
+      <directionalLight position={[5, 10, 5]} intensity={3} color="#ffffff" />
       
       {/* RectAreaLights for realistic surface highlight on the core shards */}
       <rectAreaLight
-        width={3}
-        height={3}
-        intensity={10}
+        width={10}
+        height={10}
+        intensity={15}
         color={activeColor}
-        position={[5, 5, 5]}
+        position={[0, 10, 0]}
         lookAt={[0, 0, 0]}
       />
       
-      <fog attach="fog" args={['#050505', 2, 15]} />
+      <fog attach="fog" args={['#050505', 2, 18]} />
 
         <group>
           <LaptopModel 
@@ -243,7 +221,7 @@ function Scene({ isGLReady }: { isGLReady: boolean }) {
           <group visible={scene === 'INTERFACE' || (scene === 'BOOT' && useEngineStore.getState().transitionProgress > 0.75)}>
               <CoreEngine />
               <GridFloor color={activeColor} />
-              <GlobalParticles color={activeColor} count={800} />
+              <GlobalParticles color={activeColor} count={1000} />
               {scene === 'INTERFACE' && (
                 <NeuralConnections points={connectionPoints} color={activeColor} />
               )}
@@ -283,9 +261,9 @@ function Scene({ isGLReady }: { isGLReady: boolean }) {
         </group>
       )}
       
-      <Environment preset="city" />
+      <Environment preset="night" />
       <PerformanceScaler />
-      <ContactShadows resolution={1024} scale={20} blur={2.5} opacity={0.4} far={15} color="#000000" />
+      <ContactShadows resolution={1024} scale={30} blur={3} opacity={0.6} far={15} color="#000000" />
 
       <CinematicEffects 
         isGLReady={isGLReady} 
